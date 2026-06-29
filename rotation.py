@@ -12,7 +12,6 @@ H = INV_SQRT2 * np.array([[1, 1], [1, -1]], dtype=DTYPE)
 LAMBDA_PI = np.arccos((1.0 + INV_SQRT2) / 2.0)
 TWO_PI = 2.0 * np.pi
 
-
 class Bloch:
     """Axis-angle (Bloch) form of a 2x2 unitary G:
 
@@ -26,17 +25,33 @@ class Bloch:
     n: np.ndarray  # unit rotation axis, shape (3,): [n_x, n_y, n_z]
     theta: float  # rotation angle
 
-
 def to_bloch(g: np.ndarray) -> Bloch:
     """Recover the Bloch form (alpha, n, theta) of a 2x2 unitary `g`."""
     raise NotImplementedError("to_bloch is not implemented yet")
 
+X = np.array([[0, 1],[1, 0]], dtype=DTYPE)
+
+Y = np.array([[0, -1j],[1j, 0]], dtype=DTYPE)
+
+Z = np.array([[1, 0],[0, -1]], dtype=DTYPE)
+
+def to_bloch(g):
+    g_bloch = Bloch()
+    g_bloch.alpha = 0.5*np.angle(np.linalg.det(g))
+    g_dash = np.exp(-1j * g_bloch.alpha) * g
+    g_bloch.theta = 2*np.arccos(0.5*np.trace(g_dash))
+    n1 = np.real((1j / 2.0)*np.trace(X @ g_dash))/np.sin(g_bloch.theta*0.5)
+    n2 = np.real((1j / 2.0)*np.trace(Y @ g_dash))/np.sin(g_bloch.theta*0.5)
+    n3 = np.real((1j / 2.0)*np.trace(Z @ g_dash))/np.sin(g_bloch.theta*0.5)
+    g_bloch.n = [n1,n2,n3]
+    g_bloch.n = g_bloch.n/np.linalg.norm(g_bloch.n)
+    return g_bloch
 
 # n1, n2 are two orthogonal Bloch-sphere axes (n1 . n2 == 0)
 # TODO: fill in the two orthogonal rotation axes (each a length-3
 # unit vector [x, y, z])
-n1 = np.array([np.nan, np.nan, np.nan])
-n2 = np.array([np.nan, np.nan, np.nan])
+n1 = np.array([1,0,0])
+n2 = np.array([0,1,0])
 
 # frame derived from the axes (given)
 # take the dot product of the Bloch axis with these
@@ -44,7 +59,6 @@ n2 = np.array([np.nan, np.nan, np.nan])
 a1 = -n1
 a2 = -n2
 a3 = np.cross(a1, a2)
-
 
 def n1n2n1_angles(b: Bloch) -> tuple[float, float, float, float]:
     """Factor the rotation part of a unitary (given as its Bloch form `b`) as
@@ -55,6 +69,23 @@ def n1n2n1_angles(b: Bloch) -> tuple[float, float, float, float]:
     """
     # TODO(student): implement using the steps above.
     raise NotImplementedError("n1n2n1_angles is not implemented yet")
+
+def n1n2n1_angles(b):
+    phi = b.theta/2.0
+    x = np.dot(b.n, a1)*np.sin(phi)
+    y = np.dot(b.n, a2)*np.sin(phi)
+    z = np.dot(b.n, a3)*np.sin(phi)
+    cos_beta = np.sqrt(np.cos(phi)**2 + x**2)
+    sin_beta = np.sqrt(y**2 + z**2)
+    beta = np.arctan2(sin_beta, cos_beta)
+
+    c = np.arctan2(x, np.cos(phi))
+    d = np.arctan2(z, y)
+
+    a = (c-d)/2.0
+    g = (c+d)/2.0
+
+    return a,beta,g,b.alpha
 
 
 def approx_angle_with_tolerance(angle: float, tolerance: float) -> int:
@@ -72,6 +103,16 @@ def approx_angle_with_tolerance(angle: float, tolerance: float) -> int:
     # TODO(student): implement using the hint above.
     raise NotImplementedError("approx_angle_with_tolerance is not implemented yet")
 
+def approx_angle_with_tolerance(angle,tolerance):
+    angle = angle % TWO_PI
+    k = 1
+    while True:
+        approx = (k * LAMBDA_PI) % TWO_PI
+        d = abs(approx - angle)
+        d = min(d, TWO_PI - d)
+        if d <= tolerance:
+            return k
+        k += 1
 
 def decompose_2x2(u: np.ndarray, tolerance: float) -> tuple[int, int, int]:
     """Approximate a 2x2 unitary `u` as a product of powers of M1 and M2:
@@ -101,3 +142,14 @@ def decompose_2x2(u: np.ndarray, tolerance: float) -> tuple[int, int, int]:
     """
     # TODO(student): implement using the steps above.
     raise NotImplementedError("decompose_2x2 is not implemented yet")
+
+def decompose_2x2(u,tolerance):
+    bloch = to_bloch(u)
+
+    alpha, beta, gamma, _ = n1n2n1_angles(bloch)
+
+    k = approx_angle_with_tolerance(alpha, tolerance)
+    l = approx_angle_with_tolerance(beta, tolerance)
+    m = approx_angle_with_tolerance(gamma, tolerance)
+
+    return k, l, m
